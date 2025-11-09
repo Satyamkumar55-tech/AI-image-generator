@@ -52,14 +52,14 @@ const Index = () => {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button asChild variant="hero" size="lg" className="text-lg px-8">
-                <Link to="/dashboard">
+                <Link to="/auth">
                   Get Started
                   <Sparkles />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="text-lg px-8">
-                <Link to="/profile">
-                  View Profile
+                <Link to="/auth">
+                  Sign In
                 </Link>
               </Button>
             </div>
@@ -107,7 +107,7 @@ const Index = () => {
               Join thousands of creators who are already using ImageGen to bring their visions to life
             </p>
             <Button asChild variant="hero" size="lg" className="text-lg px-8">
-              <Link to="/dashboard">
+              <Link to="/auth">
                 Start Creating Now
                 <Sparkles />
               </Link>

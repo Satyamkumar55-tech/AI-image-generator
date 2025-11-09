@@ -1,16 +1,35 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Calendar, Image } from "lucide-react";
 import Header from "@/components/Header";
+import { supabase } from "@/integrations/supabase/client";
+import { Session } from "@supabase/supabase-js";
 
 const Profile = () => {
-  // Mock user data
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Mock user data - in a real app, this would come from your database
   const user = {
-    name: "Alex Johnson",
-    email: "alex.johnson@example.com",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
-    joinedDate: new Date("2024-01-15"),
+    name: session?.user?.user_metadata?.name || "User",
+    email: session?.user?.email || "",
+    profilePicture: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.user?.email}`,
+    joinedDate: session?.user?.created_at ? new Date(session.user.created_at) : new Date(),
     credits: 150,
     totalImages: 47,
   };

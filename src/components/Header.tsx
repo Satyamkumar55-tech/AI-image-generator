@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Sparkles, User, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,12 +10,43 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import { Session } from "@supabase/supabase-js";
 
 const Header = () => {
+  const navigate = useNavigate();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const user = {
-    name: "Alex Johnson",
-    email: "alex.johnson@example.com",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
+    name: session?.user?.user_metadata?.name || "User",
+    email: session?.user?.email || "",
+    profilePicture: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.user?.email}`,
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error("Error signing out");
+    } else {
+      toast.success("Signed out successfully");
+      navigate("/auth");
+    }
   };
 
   return (
@@ -68,7 +99,7 @@ const Header = () => {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
               </DropdownMenuItem>
