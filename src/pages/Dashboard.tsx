@@ -1,61 +1,153 @@
-import { useState } from "react";
-import { Heart, Download, Trash2, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Heart, Download, Trash2, Sparkles, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import Header from "@/components/Header";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GeneratedImage {
   id: string;
-  url: string;
+  image_data: string;
   prompt: string;
   liked: boolean;
-  createdAt: Date;
+  created_at: string;
 }
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [credits, setCredits] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
 
-  const handleGenerate = () => {
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Load profile and credits
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setCredits(profile.credits);
+      }
+
+      // Load images
+      const { data: userImages } = await supabase
+        .from('images')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (userImages) {
+        setImages(userImages);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error("Please enter a prompt");
       return;
     }
 
+    if (credits < 1) {
+      toast.error("Insufficient credits. You need at least 1 credit to generate an image.");
+      return;
+    }
+
     setIsGenerating(true);
     
-    // Simulate image generation
-    setTimeout(() => {
-      const newImage: GeneratedImage = {
-        id: Date.now().toString(),
-        url: `https://picsum.photos/seed/${Date.now()}/512/512`,
-        prompt: prompt,
-        liked: false,
-        createdAt: new Date(),
-      };
-      setImages([newImage, ...images]);
-      setIsGenerating(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate image');
+      }
+
+      const data = await response.json();
+      
+      setImages([data.image, ...images]);
+      setCredits(data.remainingCredits);
       toast.success("Image generated successfully!");
       setPrompt("");
-    }, 2000);
+    } catch (error: any) {
+      console.error('Error generating image:', error);
+      toast.error(error.message || 'Failed to generate image');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const handleLike = (id: string) => {
+  const handleLike = async (id: string) => {
+    const image = images.find(img => img.id === id);
+    if (!image) return;
+
+    const newLikedState = !image.liked;
+    
     setImages(images.map(img => 
-      img.id === id ? { ...img, liked: !img.liked } : img
+      img.id === id ? { ...img, liked: newLikedState } : img
     ));
+
+    const { error } = await supabase
+      .from('images')
+      .update({ liked: newLikedState })
+      .eq('id', id);
+
+    if (error) {
+      toast.error("Failed to update like status");
+      setImages(images.map(img => 
+        img.id === id ? { ...img, liked: !newLikedState } : img
+      ));
+    }
   };
 
-  const handleDownload = (url: string, prompt: string) => {
+  const handleDownload = (imageData: string, prompt: string) => {
+    const link = document.createElement('a');
+    link.href = imageData;
+    link.download = `${prompt.substring(0, 30)}.png`;
+    link.click();
     toast.success("Download started");
-    // In a real app, this would trigger actual download
-    window.open(url, '_blank');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase
+      .from('images')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast.error("Failed to delete image");
+      return;
+    }
+
     setImages(images.filter(img => img.id !== id));
     toast.success("Image deleted");
   };
@@ -65,6 +157,19 @@ const Dashboard = () => {
       <Header />
       
       <div className="container mx-auto px-4 py-8">
+        {/* Credits Display */}
+        <div className="mb-6 flex justify-end">
+          <Card className="shadow-soft">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center gap-2">
+                <Coins className="h-5 w-5 text-primary" />
+                <span className="font-semibold">{credits}</span>
+                <span className="text-sm text-muted-foreground">Credits</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid lg:grid-cols-[1fr_2fr] gap-8">
           {/* Left Pane - Prompt Input */}
           <div className="space-y-4">
@@ -76,7 +181,7 @@ const Dashboard = () => {
                       Create Image
                     </h2>
                     <p className="text-muted-foreground text-sm">
-                      Describe what you want to see
+                      Describe what you want to see (1 credit per image)
                     </p>
                   </div>
                   
@@ -89,7 +194,7 @@ const Dashboard = () => {
                   
                   <Button
                     onClick={handleGenerate}
-                    disabled={isGenerating}
+                    disabled={isGenerating || credits < 1}
                     variant="hero"
                     size="lg"
                     className="w-full"
@@ -106,6 +211,11 @@ const Dashboard = () => {
                       </>
                     )}
                   </Button>
+                  {credits < 1 && (
+                    <p className="text-sm text-destructive text-center">
+                      You need at least 1 credit to generate an image
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -115,7 +225,14 @@ const Dashboard = () => {
           <div>
             <h2 className="text-2xl font-bold mb-4">Your Gallery</h2>
             
-            {images.length === 0 ? (
+            {loading ? (
+              <Card className="shadow-soft">
+                <CardContent className="py-16 text-center">
+                  <Sparkles className="animate-spin w-12 h-12 mx-auto text-primary" />
+                  <p className="mt-4 text-muted-foreground">Loading your images...</p>
+                </CardContent>
+              </Card>
+            ) : images.length === 0 ? (
               <Card className="shadow-soft">
                 <CardContent className="py-16 text-center">
                   <div className="max-w-sm mx-auto space-y-4">
@@ -136,14 +253,14 @@ const Dashboard = () => {
                     <CardContent className="p-4">
                       <div className="flex gap-4">
                         <img
-                          src={image.url}
+                          src={image.image_data}
                           alt={image.prompt}
                           className="w-32 h-32 object-cover rounded-lg"
                         />
                         <div className="flex-1 space-y-2">
                           <p className="font-medium line-clamp-2">{image.prompt}</p>
                           <p className="text-sm text-muted-foreground">
-                            {image.createdAt.toLocaleDateString()}
+                            {new Date(image.created_at).toLocaleDateString()}
                           </p>
                           <div className="flex gap-2">
                             <Button
@@ -156,7 +273,7 @@ const Dashboard = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleDownload(image.url, image.prompt)}
+                              onClick={() => handleDownload(image.image_data, image.prompt)}
                             >
                               <Download />
                             </Button>
