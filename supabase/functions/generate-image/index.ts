@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.80.0';
+import Replicate from 'https://esm.sh/replicate@0.25.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,41 +65,39 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Call Lovable AI to generate image
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image-preview',
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        modalities: ['image', 'text'],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('AI Gateway error:', errorData);
-      return new Response(
-        JSON.stringify({ error: 'Failed to generate image' }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    // Initialize Replicate
+    const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY');
+    if (!REPLICATE_API_KEY) {
+      return new Response(JSON.stringify({ error: 'Replicate API key not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const replicate = new Replicate({
+      auth: REPLICATE_API_KEY,
+    });
 
-    if (!imageUrl) {
+    console.log('Generating image with Replicate for prompt:', prompt);
+
+    // Generate image using Flux Schnell
+    const output = await replicate.run(
+      "black-forest-labs/flux-schnell",
+      {
+        input: {
+          prompt: prompt,
+          go_fast: true,
+          megapixels: "1",
+          num_outputs: 1,
+          aspect_ratio: "1:1",
+          output_format: "webp",
+          output_quality: 80,
+          num_inference_steps: 4
+        }
+      }
+    ) as string[];
+
+    if (!output || output.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No image generated' }),
         {
@@ -107,6 +106,53 @@ Deno.serve(async (req) => {
         }
       );
     }
+
+    const imageUrl = output[0];
+    console.log('Image generated:', imageUrl);
+
+    // Download the image from Replicate
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      console.error('Failed to download image from Replicate');
+      return new Response(
+        JSON.stringify({ error: 'Failed to download generated image' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const imageBlob = await imageResponse.blob();
+    const arrayBuffer = await imageBlob.arrayBuffer();
+    const imageBuffer = new Uint8Array(arrayBuffer);
+
+    // Upload to Supabase Storage
+    const fileName = `${user.id}/${Date.now()}.webp`;
+    const { error: uploadError } = await supabaseClient.storage
+      .from('generated-images')
+      .upload(fileName, imageBuffer, {
+        contentType: 'image/webp',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Failed to upload image to storage:', uploadError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to save image to storage' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabaseClient.storage
+      .from('generated-images')
+      .getPublicUrl(fileName);
+
+    console.log('Image uploaded to storage:', publicUrl);
 
     // Deduct 1 credit
     const { error: updateError } = await supabaseClient
@@ -118,21 +164,21 @@ Deno.serve(async (req) => {
       console.error('Failed to deduct credits:', updateError);
     }
 
-    // Save image to database
+    // Save image metadata to database
     const { data: savedImage, error: saveError } = await supabaseClient
       .from('images')
       .insert({
         user_id: user.id,
         prompt: prompt,
-        image_data: imageUrl,
+        image_data: publicUrl,
       })
       .select()
       .single();
 
     if (saveError) {
-      console.error('Failed to save image:', saveError);
+      console.error('Failed to save image metadata:', saveError);
       return new Response(
-        JSON.stringify({ error: 'Failed to save image' }),
+        JSON.stringify({ error: 'Failed to save image metadata' }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -152,7 +198,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
