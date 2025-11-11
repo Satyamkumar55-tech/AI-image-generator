@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Sparkles, User, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,8 +64,12 @@ const Header = () => {
             </span>
           </Link>
 
-          {/* User Menu */}
-          <DropdownMenu>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            
+            {/* User Menu */}
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-3">
                 <div className="text-right hidden sm:block">
@@ -105,6 +110,7 @@ const Header = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </div>
     </header>
