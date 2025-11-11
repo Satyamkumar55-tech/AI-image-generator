@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Calendar, Image, Heart } from "lucide-react";
 import Header from "@/components/Header";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Profile {
@@ -113,12 +114,21 @@ const Profile = () => {
           <Card className="shadow-medium">
             <CardContent className="pt-6">
               <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-                <Avatar className="h-32 w-32 border-4 border-primary/20">
-                  <AvatarImage src={user.profilePicture} alt={user.name} />
-                  <AvatarFallback className="text-2xl bg-gradient-primary text-primary-foreground">
-                    {user.name.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
+                <div className="relative">
+                  <Avatar className="h-32 w-32 border-4 border-primary/20">
+                    <AvatarImage src={user.profilePicture} alt={user.name} />
+                    <AvatarFallback className="text-2xl bg-gradient-primary text-primary-foreground">
+                      {user.name.split(' ').map(n => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <AvatarPicker 
+                    currentAvatar={user.profilePicture}
+                    userName={user.name}
+                    onAvatarChange={(newAvatar) => {
+                      setProfile(prev => prev ? { ...prev, avatar_url: newAvatar } : null);
+                    }}
+                  />
+                </div>
                 
                 <div className="flex-1 text-center md:text-left space-y-2">
                   <h1 className="text-3xl font-bold">{user.name}</h1>
