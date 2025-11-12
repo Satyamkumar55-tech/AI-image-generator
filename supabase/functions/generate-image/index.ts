@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.80.0';
-import Replicate from 'https://esm.sh/replicate@0.25.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,39 +64,51 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Initialize Replicate
-    const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY');
-    if (!REPLICATE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'Replicate API key not configured' }), {
+    // Use Lovable AI for image generation
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: 'Lovable API key not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const replicate = new Replicate({
-      auth: REPLICATE_API_KEY,
+    console.log('Generating image with Lovable AI for prompt:', prompt);
+
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-image-preview',
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        modalities: ['image', 'text']
+      })
     });
 
-    console.log('Generating image with Replicate for prompt:', prompt);
-
-    // Generate image using Flux Schnell
-    const output = await replicate.run(
-      "black-forest-labs/flux-schnell",
-      {
-        input: {
-          prompt: prompt,
-          go_fast: true,
-          megapixels: "1",
-          num_outputs: 1,
-          aspect_ratio: "1:1",
-          output_format: "webp",
-          output_quality: 80,
-          num_inference_steps: 4
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('Lovable AI error:', errorText);
+      return new Response(
+        JSON.stringify({ error: 'Failed to generate image' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
-      }
-    ) as string[];
+      );
+    }
 
-    if (!output || output.length === 0) {
+    const aiData = await aiResponse.json();
+    const imageDataUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+    if (!imageDataUrl) {
       return new Response(
         JSON.stringify({ error: 'No image generated' }),
         {
@@ -107,25 +118,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const imageUrl = output[0];
-    console.log('Image generated:', imageUrl);
+    console.log('Image generated successfully');
 
-    // Download the image from Replicate
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      console.error('Failed to download image from Replicate');
-      return new Response(
-        JSON.stringify({ error: 'Failed to download generated image' }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    const imageBlob = await imageResponse.blob();
-    const arrayBuffer = await imageBlob.arrayBuffer();
-    const imageBuffer = new Uint8Array(arrayBuffer);
+    // Convert base64 to buffer
+    const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
     // Upload to Supabase Storage
     const fileName = `${user.id}/${Date.now()}.webp`;
