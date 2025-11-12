@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Heart, Download, Trash2, Sparkles, Coins } from "lucide-react";
+import { Heart, Download, Trash2, Sparkles, Coins, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +22,7 @@ const Dashboard = () => {
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [credits, setCredits] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [fullscreenImage, setFullscreenImage] = useState<GeneratedImage | null>(null);
 
   useEffect(() => {
     loadUserData();
@@ -255,7 +257,8 @@ const Dashboard = () => {
                         <img
                           src={image.image_data}
                           alt={image.prompt}
-                          className="w-32 h-32 object-cover rounded-lg"
+                          className="w-32 h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setFullscreenImage(image)}
                         />
                         <div className="flex-1 space-y-2">
                           <p className="font-medium line-clamp-2">{image.prompt}</p>
@@ -295,6 +298,29 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Fullscreen Image Dialog */}
+      <Dialog open={!!fullscreenImage} onOpenChange={() => setFullscreenImage(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
+          <div className="relative w-full h-full flex items-center justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
+              onClick={() => setFullscreenImage(null)}
+            >
+              <X className="h-6 w-6" />
+            </Button>
+            {fullscreenImage && (
+              <img
+                src={fullscreenImage.image_data}
+                alt={fullscreenImage.prompt}
+                className="max-w-full max-h-[90vh] object-contain"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
