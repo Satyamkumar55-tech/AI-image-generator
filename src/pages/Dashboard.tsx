@@ -4,6 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +32,7 @@ const Dashboard = () => {
   const [credits, setCredits] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [fullscreenImage, setFullscreenImage] = useState<GeneratedImage | null>(null);
+  const [showOutOfCreditsDialog, setShowOutOfCreditsDialog] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -67,8 +77,8 @@ const Dashboard = () => {
       return;
     }
 
-    if (credits < 1) {
-      toast.error("Insufficient credits. You need at least 1 credit to generate an image.");
+    if (credits === 0) {
+      setShowOutOfCreditsDialog(true);
       return;
     }
 
@@ -321,6 +331,23 @@ const Dashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Out of Credits Dialog */}
+      <AlertDialog open={showOutOfCreditsDialog} onOpenChange={setShowOutOfCreditsDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>You are out of credits.</AlertDialogTitle>
+            <AlertDialogDescription>
+              Purchase more credits to continue generating amazing AI images.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowOutOfCreditsDialog(false)}>
+              Buy Now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
