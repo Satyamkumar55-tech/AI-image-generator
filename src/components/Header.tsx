@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Sparkles, User, Settings, LogOut } from "lucide-react";
+import { Sparkles, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -140,10 +140,6 @@ const Header = () => {
                   <Sparkles className="mr-2 h-4 w-4" />
                   Dashboard
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
