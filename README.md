@@ -2,7 +2,8 @@
 
 ## Project info
 
-**URL**: [https://lovable.dev/projects/1740ca51-2291-4d9d-8c8d-5b0732e0e406](https://lovable.dev/projects/1740ca51-2291-4d9d-8c8d-5b0732e0e406)
+**URL**:https://imagicraft-ai-lab.lovable.app
+
 
 ## How can I edit this code?
 
