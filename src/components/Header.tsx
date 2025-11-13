@@ -19,6 +19,7 @@ import { Session } from "@supabase/supabase-js";
 const Header = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -34,10 +35,51 @@ const Header = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!session?.user) return;
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile?.avatar_url) {
+        setAvatarUrl(profile.avatar_url);
+      }
+    };
+
+    loadProfile();
+
+    // Subscribe to profile changes
+    const channel = supabase
+      .channel('profile-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${session?.user?.id}`
+        },
+        (payload: any) => {
+          if (payload.new?.avatar_url) {
+            setAvatarUrl(payload.new.avatar_url);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
   const user = {
     name: session?.user?.user_metadata?.name || "User",
     email: session?.user?.email || "",
-    profilePicture: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.user?.email}`,
+    profilePicture: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.user?.email}`,
   };
 
   const handleLogout = async () => {
