@@ -141,12 +141,32 @@ const Dashboard = () => {
     }
   };
 
-  const handleDownload = (imageData: string, prompt: string) => {
-    const link = document.createElement('a');
-    link.href = imageData;
-    link.download = `${prompt.substring(0, 30)}.png`;
-    link.click();
-    toast.success("Download started");
+  const handleDownload = async (imageData: string, prompt: string) => {
+    try {
+      let blob: Blob;
+      if (imageData.startsWith('data:')) {
+        const res = await fetch(imageData);
+        blob = await res.blob();
+      } else {
+        const res = await fetch(imageData, { mode: 'cors' });
+        if (!res.ok) throw new Error('Failed to fetch image');
+        blob = await res.blob();
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const safeName = prompt.substring(0, 30).replace(/[^\w\-\s]/g, '').trim() || 'image';
+      link.download = `${safeName}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success("Download started");
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error("Failed to download image");
+    }
   };
 
   const handleDelete = async (id: string) => {
