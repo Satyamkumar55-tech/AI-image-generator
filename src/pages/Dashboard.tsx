@@ -148,7 +148,9 @@ const Dashboard = () => {
         const res = await fetch(imageData);
         blob = await res.blob();
       } else {
-        const res = await fetch(imageData, { mode: 'cors' });
+        // Add cache-buster to avoid cached opaque responses
+        const url = `${imageData}${imageData.includes('?') ? '&' : '?'}dl=${Date.now()}`;
+        const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to fetch image');
         blob = await res.blob();
       }
@@ -165,7 +167,36 @@ const Dashboard = () => {
       toast.success("Download started");
     } catch (error) {
       console.error('Download failed:', error);
-      toast.error("Failed to download image");
+      // Fallback: try rendering through a canvas (works for CORS-enabled images)
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error('Image load failed'));
+          img.src = imageData;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('No canvas context');
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        const safeName = prompt.substring(0, 30).replace(/[^\w\-\s]/g, '').trim() || 'image';
+        link.download = `${safeName}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("Download started");
+      } catch (fallbackError) {
+        console.error('Canvas fallback failed:', fallbackError);
+        // Last resort: open image in a new tab so user can save it manually
+        window.open(imageData, '_blank', 'noopener,noreferrer');
+        toast.error("Could not auto-download. Image opened in a new tab — right-click to save.");
+      }
     }
   };
 
